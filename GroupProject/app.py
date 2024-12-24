@@ -15,7 +15,7 @@ def login():
 @app.route('/login', methods=['POST'])
 def do_login():
     username = request.form['username']
-    password = request.form['密码']
+    password = request.form['userpassword']
 
     if username == 'Admin' and password == '123456':
         return redirect(url_for('map_page'))
