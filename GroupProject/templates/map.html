@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高德地图搜索功能</title>
+    <style>
+        /* 地图容器 */
+        #container {
+            width: 100%;
+            height: 100vh; /* 使用 100vh 让地图填满整个浏览器窗口 */
+            position: relative; /* 使得子元素（如搜索框）可以相对这个容器定位 */
+        }
+
+        /* 搜索框容器 */
+        .search-container {
+            position: absolute;  /* 相对地图容器定位 */
+            top: 10px;           /* 距离顶部 10px */
+            left: 10px;          /* 距离左侧 10px */
+            display: flex;       /* 使用 Flexbox 布局 */
+            align-items: center; /* 垂直居中 */
+            z-index: 10;         /* 确保搜索框在地图上层 */
+        }
+
+        /* 搜索框样式 */
+        #searchBox {
+            width: 400px;        /* 设置搜索框宽度 */
+            padding: 10px;        /* 内边距 */
+            font-size: 16px;     /* 字体大小 */
+            border: 1px solid #ccc; /* 边框 */
+        }
+
+        /* 搜索按钮样式 */
+        #searchButton {
+            margin-left: 0;   /* 按钮与输入框之间的间距 */
+            padding: 10px 15px;   /* 按钮内边距 */
+            font-size: 16px;     /* 字体大小 */
+            background-color: #289ff8; /* 按钮背景色 */
+            color: white;        /* 按钮字体颜色 */
+            border: none;        /* 去掉按钮边框 */
+            cursor: pointer;     /* 鼠标悬停时显示手型 */
+        }
+
+        #searchButton:hover {
+            background-color: #4682B4; /* 按钮悬停时变色 */
+        }
+
+        /* 景点搜索框自动完成建议下拉框 */
+        .suggestions-list {
+            position: absolute;
+            top: 100%; /* 将下拉框定位到搜索框的下方 */
+            left: 0;
+            background-color: white;
+            border: 1px solid #ccc;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%; /* 与搜索框宽度一致 */
+            z-index: 1000;
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            display: none; /* 默认隐藏，只有在有匹配项时才显示 */
+        }
+
+        .suggestions-list li {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .suggestions-list li:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* 景点详细信息区域 */
+        .details-container {
+            position: absolute;
+            top: 100px; /* 放置在搜索框下方 */
+            left: 10px;
+            width: 400px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            z-index: 10;
+            display: none; /* 初始时隐藏 */
+        }
+
+        .details-container h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .details-container p {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        /* 圆形路线按钮的样式 */
+        .route-button {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 60px;
+            height: 60px;
+            background-color: #289ff8;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: background-color 0.3s ease;
+        }
+
+        .route-button:hover {
+            background-color: #4682B4;
+        }
+         /* 模态窗口样式 */
+        .route-modal {
+            display: none; /* 初始时隐藏模态窗口 */
+            position: fixed;
+            z-index: 1001; /* 确保窗口在地图之上 */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5); /* 半透明背景 */
+        }
+
+        /* 路线模块模态窗口内容 */
+        .route-modal-content {
+            position: relative;
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 300px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 关闭按钮 */
+        .close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* 输入框样式 */
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /* 按钮样式 */
+        .modal-buttons {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            background-color: #289ff8;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #4682B4;
+        }
+
+        #closeModalButton {
+            background-color: #f44336;
+        }
+
+        /* 起点输入自动完成建议下拉框 */
+        .suggestions-list2 {
+            position: absolute;
+            top: 100%; /* 将下拉框定位到搜索框的下方 */
+            left: 0;
+            background-color: white;
+            border: 1px solid #ccc;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%; /* 与搜索框宽度一致 */
+            z-index: 1000;
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            display: none; /* 默认隐藏，只有在有匹配项时才显示 */
+        }
+
+        .suggestions-list2 li {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .suggestions-list2 li:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* 终点输入自动完成建议下拉框 */
+        .suggestions-list3 {
+            position: absolute;
+            top: 100%; /* 将下拉框定位到搜索框的下方 */
+            left: 0;
+            background-color: white;
+            border: 1px solid #ccc;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%; /* 与搜索框宽度一致 */
+            z-index: 1000;
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            display: none; /* 默认隐藏，只有在有匹配项时才显示 */
+        }
+
+        .suggestions-list3 li {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .suggestions-list3 li:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* 出行模块按钮 */
+        .transform-button {
+            position: fixed;
+            right: 20px;
+            bottom: 100px;
+            width: 60px;
+            height: 60px;
+            background-color: #289ff8;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: background-color 0.3s ease;
+        }
+
+        .transform-button:hover {
+            background-color: #4682B4;
+        }
+
+        /* 出行模块模态窗口 */
+        .traffic-search {
+            display: none; /* 初始时隐藏模态窗口 */
+            position: fixed;
+            z-index: 1001; /* 确保窗口在地图之上 */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5); /* 半透明背景 */
+        }
+
+        /* 出行模块模态窗口内容 */
+        .traffic-search-content {
+            position: relative;
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 300px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 关闭按钮 */
+        .traffic-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* 按钮样式 */
+        .traffic-buttons {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #metrobutton {
+            width: 80px;
+            height: 80px;
+            background-color: #289ff8;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: background-color 0.3s ease;
+        }
+
+        #railwaybutton {
+            width: 80px;
+            height: 80px;
+            background-color: #289ff8;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transition: background-color 0.3s ease;
+        }
+
+        #metrobutton:hover {
+            background-color: #4682B4;
+        }
+
+        #railwaybutton:hover {
+            background-color: #4682B4;
+        }
+    </style>
+</head>
+<body>
+    <!-- 地图容器 -->
+    <div id="container">
+        <!-- 搜索框和按钮 -->
+        <div class="search-container">
+            <input id="searchBox" type="text" placeholder="请输入景点名称">
+            <button id="searchButton">搜索</button>
+            <ul id="suggestionsList" class="suggestions-list"></ul>
+        </div>
+        <!-- 景点详细信息区域 -->
+        <div id="detailsContainer" class="details-container">
+            <h3>景点信息</h3>
+            <p id="detailsText">detail</p>
+        </div>
+    </div>
+    <!-- 圆形路线按钮 -->
+    <div id="routeButton" class="route-button">
+        <span>路线</span>
+    </div>
+    <!-- 圆形出行按钮 -->
+    <div id="transformButton" class="transform-button">
+        <span>出行</span>
+    </div>
+    <!-- 路线规划的模态窗口 -->
+    <div id="routeModal" class="route-modal">
+        <div class="route-modal-content">
+            <span id="closeModal" class="close">&times;</span>
+            <h2>路线规划</h2>
+            <div>
+                <label for="startPoint">起点：</label>
+                <input type="text" id="startPoint" placeholder="请输入起点">
+                <ul id="suggestionsList2" class="suggestions-list2"></ul>
+            </div>
+            <div>
+                <label for="endPoint">终点：</label>
+                <input type="text" id="endPoint" placeholder="请输入终点">
+                <ul id="suggestionsList3" class="suggestions-list3"></ul>
+            </div>
+            <div class="modal-buttons">
+                <button id="planRouteButton">规划路线</button>
+                <button id="closeModalButton">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 出行模块的的模态窗口 -->
+    <div id="traffic" class="traffic-search">
+        <div class="traffic-search-content">
+            <span id="traffic-shutdown" class="traffic-close">&times;</span>
+            <h2>出行</h2>
+            <div class="traffic-buttons">
+                <a href="metro_map.html">
+                    <button id="metrobutton">地铁</button>
+                </a>
+                <a href="https://www.12306.cn/index/">
+                    <button id="railwaybutton">铁路</button>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://webapi.amap.com/maps?v=2.0&key=433cbc27ec5a8d5842d0ccfecfdc4f9a"></script>
+    <script>
+        // 初始化地图
+        var map = new AMap.Map('container', {
+            center: [103.8343, 36.0612], // 默认中心
+            zoom: 13 // 默认缩放级别
+        });
+
+        // 预设景点的经纬度
+        var places = {
+            "兰州西高铁站": [103.75202, 36.06759],
+            "兰州中川机场T1T2": [103.61768, 36.50763],
+            "兰州中川机场T3": [103.63749, 36.52355],
+            "兰州火车站": [103.85115,36.03468],
+            "秦王川站": [103.76897, 36.47022],
+            "甘肃省博物馆": [103.77462, 36.066597],
+            "白塔山公园": [103.811775, 36.069454],
+            "东方红广场": [103.841789, 36.05241],
+            "五泉山公园": [103.82428, 36.036587],
+            "雁滩公园": [103.8554, 36.060486],
+            "中山桥": [103.81743, 36.06542],
+            "兰山公园": [103.840088, 36.02803],
+            "兰州植物园": [103.705429, 36.119057],
+            "兰州体育公园": [103.850388, 36.064018],
+            "罗家大院": [104.189125, 36.327766],
+            "钱币博物馆": [103.848038, 36.052402],
+            "中川公园": [103.614311, 36.102143],
+            "八路军办事处纪念馆": [103.826546, 36.050362],
+            "兰州中心": [103.77517, 36.06896],
+            "奥体中心": [103.77948, 36.06939]
+        };
+
+        // 景点搜索模块
+        var searchBox = document.getElementById('searchBox');
+        var suggestionsList = document.getElementById('suggestionsList');
+        var searchButton = document.getElementById('searchButton');
+        var detailsContainer = document.getElementById('detailsContainer');
+        var detailsText = document.getElementById('detailsText');
+
+        // 搜索框输入事件，更新建议列表
+        searchBox.addEventListener('input', function () {
+            var query = searchBox.value.trim().toLowerCase();
+            if (query === '') {
+                suggestionsList.style.display = 'none'; // 隐藏下拉框
+                return;
+            }
+
+            var suggestions = Object.keys(places).filter(function (name) {
+                return name.toLowerCase().includes(query);
+            });
+
+        // 清空下拉框并展示匹配的景点
+            suggestionsList.innerHTML = '';
+            suggestions.forEach(function (name) {
+                var li = document.createElement('li');
+                li.textContent = name;
+                li.addEventListener('click', function () {
+                    searchBox.value = name;
+                    search(name); // 触发搜索功能
+                    suggestionsList.style.display = 'none'; // 隐藏下拉框
+                });
+                suggestionsList.appendChild(li);
+            });
+            // 显示或隐藏下拉框
+            suggestionsList.style.display = suggestions.length > 0 ? 'block' : 'none';
+        });
+        // 通过键盘上的Enter键提交搜索结果
+        searchBox.addEventListener('keydown', function (){
+            if (event.key === "Enter") {
+                var query = searchBox.value.trim();
+
+                if (query === '') {
+                    // 如果搜索框为空或只有空格，回到默认视角
+                    map.setCenter([103.8343, 36.0612]); // 默认中心点（例如：兰州）
+                    map.setZoom(13); // 默认缩放级别
+                    detailsContainer.style.display = 'none'; // 隐藏景点详情
+                } else {
+                    // 根据选择的景点更新地图并显示详细信息
+                    search(query);
+                }
+            }
+        });
+
+        // 点击搜索按钮
+        searchButton.addEventListener('click', function () {
+            var query = searchBox.value.trim();
+
+            if (query === '') {
+                // 如果搜索框为空或只有空格，回到默认视角
+                map.setCenter([103.8343, 36.0612]); // 默认中心点（例如：兰州）
+                map.setZoom(13); // 默认缩放级别
+                detailsContainer.style.display = 'none'; // 隐藏景点详情
+            } else {
+                // 根据选择的景点更新地图并显示详细信息
+                search(query);
+            }
+        });
+
+        // 根据选择的景点更新地图
+        function search(name) {
+            var place = places[name];
+            if (place) {
+                map.setCenter(place);
+                map.clearMap();
+                var marker = new AMap.Marker({
+                    position: place,
+                    title: name
+                });
+                marker.setMap(map);
+                map.setZoom(18);
+
+                // 显示详细信息区域
+                // 构建URL，传入坐标和地名
+                var coordinates = places[name];  // 获取对应坐标
+                var dest = coordinates.join(',');
+                var destName = encodeURIComponent(name);
+                var url = 'https://m.amap.com/around/?locations='+dest+
+                    '&keywords=美食,酒店,地铁站,公交站&defaultIndex=1&defaultView=list&searchRadius=3000&key=433cbc27ec5a8d5842d0ccfecfdc4f9a&jscode=4b0c61fa5a55f8c68699eaa591ccea98'
+                detailsContainer.style.display = 'block';
+                detailsText.textContent = "详细信息：";
+
+                // 当搜索框清空时，隐藏详情框和地图上对应的标点
+                searchBox.addEventListener('input', function (){
+                    var content = searchBox.value
+                    if (content == '' || ' '){
+                        detailsContainer.style.display = 'none';
+                        marker.setMap(null);
+                    }
+                })
+                // 创建超链接元素
+                var link = document.createElement('a');
+                link.href = url;  // 设置链接地址
+                link.target = '_blank';  // 设置新窗口打开链接
+                link.textContent = "点击这里查看"+name+"的详细信息";  // 设置超链接文本
+
+                // 将超链接添加到 detailsText 中
+                detailsText.appendChild(link);
+            } else {
+                alert("没有找到该景点");
+            }
+        }
+
+        // 路线规划模块
+        var routeButton = document.getElementById('routeButton');
+        var routeModal = document.getElementById('routeModal');
+        var closeModal = document.getElementById('closeModal');
+        var closeModalButton = document.getElementById('closeModalButton');
+        var planRouteButton = document.getElementById('planRouteButton');
+        var startPointInput = document.getElementById('startPoint');
+        var endPointInput = document.getElementById('endPoint');
+        var suggestionsList2 = document.getElementById('suggestionsList2')
+        var suggestionsList3 = document.getElementById('suggestionsList3')
+
+        // 打开模态窗口
+        routeButton.addEventListener('click', function() {
+            routeModal.style.display = 'block'; // 显示模态窗口
+        });
+
+        // 关闭模态窗口
+        closeModal.addEventListener('click', function() {
+            routeModal.style.display = 'none'; // 隐藏模态窗口
+            startPointInput.value = "";
+            endPointInput.value = "";
+        });
+        closeModalButton.addEventListener('click', function() {
+            routeModal.style.display = 'none'; // 隐藏模态窗口
+            startPointInput.value = "";
+            endPointInput.value = "";
+        });
+
+        // 起点框输入事件，更新建议列表
+        startPointInput.addEventListener('input', function () {
+            var query = startPointInput.value.trim().toLowerCase();
+            if (query === '') {
+                suggestionsList2.style.display = 'none'; // 隐藏下拉框
+                return;
+            }
+
+            var suggestions = Object.keys(places).filter(function (name) {
+                return name.toLowerCase().includes(query);
+            });
+
+        // 清空下拉框并展示匹配的景点
+            suggestionsList2.innerHTML = '';
+            suggestions.forEach(function (name) {
+                var li = document.createElement('li');
+                li.textContent = name;
+                li.addEventListener('click', function () {
+                    startPointInput.value = name;
+                    suggestionsList2.style.display = 'none'; // 隐藏下拉框
+                });
+                suggestionsList2.appendChild(li);
+            });
+
+            // 显示或隐藏下拉框
+            suggestionsList2.style.display = suggestions.length > 0 ? 'block' : 'none';
+        });
+
+        // 终点输入事件，更新建议列表
+        endPointInput.addEventListener('input', function (event) {
+            var query = endPointInput.value.trim().toLowerCase();
+            if (query === '') {
+                suggestionsList3.style.display = 'none'; // 隐藏下拉框
+                return;
+            }
+
+            var suggestions = Object.keys(places).filter(function (name) {
+                return name.toLowerCase().includes(query);
+            });
+
+        // 清空下拉框并展示匹配的景点
+            suggestionsList3.innerHTML = '';
+            suggestions.forEach(function (name) {
+                var li = document.createElement('li');
+                li.textContent = name;
+                li.addEventListener('click', function () {
+                    endPointInput.value = name;
+                    suggestionsList3.style.display = 'none'; // 隐藏下拉框
+                });
+                suggestionsList3.appendChild(li);
+            });
+
+            // 显示或隐藏下拉框
+            suggestionsList3.style.display = suggestions.length > 0 ? 'block' : 'none';
+        });
+
+        // 点击“规划路线”按钮时，触发路线规划
+        planRouteButton.addEventListener('click', function() {
+            var startPoint = startPointInput.value;
+            var endPoint = endPointInput.value;
+
+            if (startPoint && endPoint) {
+                console.log('规划路线:', startPoint, '->', endPoint);
+                // 调用高德地图路线规划组件API
+                planRoute(startPoint, endPoint);
+            } else {
+                alert("请填写起点和终点");
+            }
+        });
+        // 路线规划逻辑，调用高德API来规划路线
+        function planRoute(startPoint, endPoint) {
+            var url2 = 'https://m.amap.com/navi/?start='+places[startPoint]+
+                '&dest='+places[endPoint]+'&destName='+endPoint+
+                '&naviBy=car&key=433cbc27ec5a8d5842d0ccfecfdc4f9a&jscode=4b0c61fa5a55f8c68699eaa591ccea98'
+            window.open(url2, '_blank')
+        }
+
+        // 出行模块
+        var trafficButton = document.getElementById('transformButton');
+        var trafficWindow = document.getElementById('traffic');
+        var trafficClose = document.getElementById('traffic-shutdown');
+
+        // 出行按钮唤醒窗口
+        trafficButton.addEventListener('click', function(){
+            trafficWindow.style.display = 'block';
+        });
+
+        // 右上角关闭按钮
+        trafficClose.addEventListener('click', function (){
+            trafficWindow.style.display = 'none';
+        });
+
+    </script>
+</body>
+</html>
